@@ -7,9 +7,13 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.listener.api.ChannelAwareMessageListener;
+import org.springframework.retry.RecoveryCallback;
+import org.springframework.retry.RetryCallback;
+import org.springframework.retry.RetryContext;
 import org.springframework.retry.policy.SimpleRetryPolicy;
 import org.springframework.retry.support.RetryTemplate;
 
+import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -52,12 +56,13 @@ public abstract class AbstractMessageHandler implements ChannelAwareMessageListe
             mqMessage = JSONObject.parseObject(msg, MqMessage.class);
             //自定义处理业务
             this.handleMessage(JSONObject.toJSONString(mqMessage.getMessageBody()), channel);
+            handleResult = true;
         } catch (Exception e) {
             e.printStackTrace();
         }
 
         //消息处理失败 采取的措施
-
+        this.onMessageCompleted(mqMessage, queue, channel, deliveryTag, handleResult);
     }
 
 
@@ -82,7 +87,47 @@ public abstract class AbstractMessageHandler implements ChannelAwareMessageListe
             //重试发送
             RetryTemplate retryTemplate = new RetryTemplate();
             SimpleRetryPolicy policy = new SimpleRetryPolicy();
+            //重试次数
+            policy.setMaxAttempts(retryTimes);
+            retryTemplate.setRetryPolicy(policy);
 
+            try {
+                Integer result = retryTemplate.execute(new RetryCallback<Integer, Throwable>() {
+                    Integer count = 0;
+
+                    @Override
+                    public Integer doWithRetry(RetryContext retryContext) {
+                        //开始重试
+                        try {
+                            channel.basicAck(deliveryTag, false);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        AbstractMessageHandler.this.logger.info("消息：" + mqMessage.getMessageBody().toString() + " 已经签收！！");
+
+                        return ++this.count;
+                    }
+                }, new RecoveryCallback<Integer>() {
+                    @Override
+                    public Integer recover(RetryContext retryContext) {
+                        //重试多次依然失败
+                        AbstractMessageHandler.this.logger.info("消息" + mqMessage.toString() + "签收失败");
+                        return Integer.MAX_VALUE;
+                    }
+                });
+
+                if (result.intValue() <= retryTimes) {
+                    //消息发送成功
+                } else {
+                    //消息发送失败
+                }
+
+            } catch (Exception e) {
+                this.logger.error("消息:" + mqMessage.getMessageBody().toString() + " 签收异常！！！");
+            } catch (Throwable throwable) {
+                this.logger.error("消息:" + mqMessage.getMessageBody().toString() + " 签收异常！！！");
+                throwable.printStackTrace();
+            }
 
         } else {
             this.logger.info("消息：" + mqMessage.getMessageBody().toString() + " 已经自动签收！！！");

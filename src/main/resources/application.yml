@@ -1,3 +1,4 @@
+
 spring:
   application:
     name: happy-mq
@@ -6,6 +7,8 @@ spring:
     username: happy
     password: L123456
     port: 5672
+    queue:
+      isAck: false
     template:
       mandatory: true  #true时,当按照key匹配失败时,通过回调函数发送消息给生产者
     publisher-confirms: true
@@ -15,3 +18,5 @@ spring:
 mq:
   config:
     exchange: test.topic
+server:
+  port: 8099

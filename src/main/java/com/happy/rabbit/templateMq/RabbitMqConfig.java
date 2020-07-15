@@ -1,5 +1,6 @@
 package com.happy.rabbit.templateMq;
 
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -48,16 +49,20 @@ public class RabbitMqConfig {
         cachingConnectionFactory.setAddresses(vHost);
         cachingConnectionFactory.setUsername(username);
         cachingConnectionFactory.setPassword(password);
-        cachingConnectionFactory.setVirtualHost("v-rabbitmq-template");
+        cachingConnectionFactory.setVirtualHost("happy");
         //消息设置成回调 一下必须设置成true
         cachingConnectionFactory.setPublisherConfirms(this.publisherConfirms);
         cachingConnectionFactory.setPublisherReturns(this.publisherReturns);
         return cachingConnectionFactory;
+    }
 
+    @Bean(value = "templateExchange")
+    public TopicExchange templateExchange() {
+        return new TopicExchange(exchange);
     }
 
     /**
-     *@Scope SCOPE_PROTOTYPE 多例
+     * @Scope SCOPE_PROTOTYPE 多例
      ***/
     @Bean(name = "rabbitTemplate")
     @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
